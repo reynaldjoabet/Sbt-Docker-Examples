@@ -1,4 +1,4 @@
-# Sbt-Examples
+# Sbt-Docker-Examples
 what tasks depends on what? -> sbt scope delegation
 
 
@@ -661,3 +661,90 @@ The recommended migration path is to create a subproject named “integration”
 
 use to skip publishing artifact 
     `projectname/publish / skip := true`
+
+#### Docker-JDK
+Alpine images are very light images that strip off all non-essential parts of the OS.
+The base command line interpreter is available under /bin/sh, but the enhanced version of shell will not be there in Alpine images. The error indicates that the bash binary file is not accessible on the default path:    
+`docker run -it a3562aa0b991 /bin/bash` will result in an error while the command line shell is accessible on /bin/sh:
+`docker run -it a3562aa0b991 /bin/sh`
+
+
+We’ll log in to the container with a basic command line interpreter (/bin/sh). Next, using the Alpine Package Keeper (apk), we can install bash into the container core utilities.
+
+```bash
+docker run -i -t openjdk:8-jdk-alpine /bin/sh
+/  which bash
+/ #
+/ # apk add --no-cache bash
+...
+... output truncated ...
+...
+(5/5) Installing bash (4.4.19-r1)
+Executing bash-4.4.19-r1.post-install
+/ # which bash
+/bin/bash
+
+```
+
+This installation forms a new layer on top of the existing openjdk-alpine container
+
+We can use the `docker commit` command to turn this stopped container into an image:
+
+```bash
+docker commit daf51dcba91c openjdk:8-jdk-alpine-with-bash-cli-mode
+sha256:be9564ccef2fa48c214d99eb06c044b606c67b0cb4ac1a1b713ae39018d640ce
+
+docker images
+REPOSITORY   TAG                               IMAGE ID       CREATED         SIZE
+openjdk      8-jdk-alpine-with-bash-cli-mode   be9564ccef2f   6 seconds ago   110MB
+openjdk      8-jdk-alpine                      a3562aa0b991   3 years ago     105M
+
+```
+
+Let’s quickly spin a container with our custom-built Alpine image (openjdk:8-jdk-alpine-with-bash-cli-mode).
+
+```bash
+docker run --rm -i -t openjdk:8-jdk-alpine-with-bash-cli-mode /bin/bash
+bash-4.4
+bash-4.4# which bash
+/bin/bash
+
+```
+
+Docker images are created by connecting many read-only layers, which are stacked on top of each other to form a complete image. The platforms like Docker and Podman bring the layers together to portray them as a single unified object.
+
+```bash
+docker pull mysql
+Using default tag: latest
+latest: Pulling from library/mysql
+492d84e496ea: Pull complete
+bbe20050901c: Pull complete
+e3a5e171c2f8: Pull complete
+c3aceb7e4f48: Pull complete
+269002e5cf58: Pull complete
+d5abeb1bd18e: Pull complete
+cbd79da5fab6: Pull complete
+Digest: sha256:cdf3b62d78d1bbb1d2bd6716895a84014e00716177cbb7e90f6c6a37a21dc796
+Status: Downloaded newer image for mysql:latest
+
+```
+
+`Each line in the above snippet that ends with “Pull complete” represents the layers pulled from the registry to form an image`. As we can see, there are seven layers for the MySQL image.
+
+>`Instructions like RUN, COPY, and ADD in the Dockerfile create the new layer, whilst others create only the intermediate layers. The former commands have an impact on the layer sizes, but the latter doesn’t`
+
+
+` ---> Running in 2c90e21f29e2`
+it means it is a container(Container ID: 2c90e21f29e2)
+
+`Dangling images are image layers that are created during image formation. However, after image creation, these layers won’t have any relationship with any tagged images`. So it’s safe to remove all those images as they consume unnecessary disk space.
+
+To list out all the dangling images, we can use the docker image command with the dangling attribute set to true in the search filter:
+
+`# docker images --filter "dangling=true"`
+
+The command below shows the dangling images and then removes them subsequently:
+
+`# docker images --quiet --filter=dangling=true | xargs --no-run-if-empty docker rmi`
+
+

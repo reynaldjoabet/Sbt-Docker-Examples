@@ -4,17 +4,10 @@ import sbt._
 import sbt.internal.DslEntry
 import sbt.Keys._
 
-scalaVersion := "2.13.13"
 
-//ThisBuild / parallelExecution := false
-
-name := "Sbt-Examples"
+name := "Sbt-Docker-Examples"
 
 version := "1.0"
-
-lazy val root = (project in file(".")).settings(name := "name")
-
-lazy val domain = project
 
 // the scala version in root will be 2.13.13 while that in domain will be 2.12.18
 
@@ -42,10 +35,9 @@ val f = settingKey[Int]("")
 // ThisBuild
 // BuildReference
 
-ThisBuild / scalaVersion := "2.13.13"
+ThisBuild / scalaVersion := "3.3.3"
 
 //InThisBuild/ scalaVersion
-scalaVersion in ThisBuild := "2.12.3"
 
 lazy val global: Project = project
   .in(file("."))
@@ -102,9 +94,16 @@ ThisBuild / Compile / bar := 1
 
 lazy val common = project
 
+
 lazy val multi1 = project.dependsOn(
   common
 )
+
+//This defines compile dependency between multi1 and common. Before we compile multi1,common must be successfully compiled first
+// And when we work  within multi1, we can use classes from src/main/scala and resources from src/main/resources from common. Buf if we wanted to reuse in multi1's tests some code from module common, it won't work. We need to make it work like so
+// lazy val multi1 = project.dependsOn(
+//   common%"compile->compile; test->test"
+// )
 
 //A project may depend on code in another project
 //Now code in multi2  can use classes from common
@@ -138,7 +137,7 @@ buildInfo := {
   f :: Nil
 }
 
-semanticdbEnabled := true
+ThisBuild/semanticdbEnabled := true
 //add the task to the list of source generators
 //sourceGenerators in  Compile += buildInfo
 
@@ -310,3 +309,35 @@ lazy val integration = (project in file("integration"))
     // test dependencies
     // libraryDependencies += something % Test,
   )
+
+
+
+// val docker = Seq(
+//   Universal / javaOptions += "-Djdk.httpclient.allowRestrictedHeaders=cache-control,accept,accept-encoding,accept-language,connection,content-type,content-length,expect,host,referer",
+//   dockerEnvVars ++= Map("VERSION" -> version.value),
+//   packageName        := moduleName.value,
+//   version            := version.value,
+//   maintainer         := "example@example.com",
+//   dockerUsername     := sys.env.get("DOCKER_USERNAME"),
+//   dockerRepository   := sys.env.get("DOCKER_REPO_URI"),
+//   dockerBaseImage    := "amazoncorretto:22.0.0-alpine",
+//   dockerUpdateLatest := true,
+//   dockerCommands := {
+//     val commands         = dockerCommands.value
+//     val (stage0, stage1) = commands.span(_ != DockerStageBreak)
+//     val (before, after)  = stage1.splitAt(4)
+//     val installBash      = Cmd("RUN", "apk update && apk upgrade && apk add bash && apk add curl")
+//     stage0 ++ before ++ List(installBash) ++ after
+//   }
+// )
+
+Compile / compile / scalacOptions += "-deprecation"
+
+
+//myTask depends on compile
+lazy val myTask2 = taskKey[Unit]("A custom task that depends on compile")
+
+myTask2 := {
+  val _ =(Compile / compile ).value // This ensures that `compile` runs before `myTask`
+  println("Compilation completed. Now executing myTask.")
+}
